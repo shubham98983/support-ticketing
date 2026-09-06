@@ -1,0 +1,21 @@
+{
+  "name": "takehome-04-support-ticketing",
+  "version": "1.0.0",
+  "description": "Picture a small software company fielding a growing stream of customer support requests — bug reports, billing questions, plain \"how do I\" questions — that currently arrive by email and get handled ad hoc. Whoever notices an email first replies to it, sometimes twice, sometimes not at all.",
+  "main": "index.js",
+  "directories": {
+    "doc": "docs"
+  },
+  "scripts": {
+    "test": "echo \"Error: no test specified\" && exit 1"
+  },
+  "keywords": [],
+  "author": "",
+  "license": "ISC",
+  "type": "commonjs",
+  "dependencies": {
+    "dotenv": "^17.4.2",
+    "express": "^5.2.1",
+    "pg": "^8.23.0"
+  }
+}
