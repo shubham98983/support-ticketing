@@ -7,9 +7,9 @@ below, not necessarily the last one; add a **Later reversed:** line to whichever
 
 ## Decision 1
 
-- **Chose:**
-- **Rejected:**
-- **Why:**
+- Chose: No customer portal or inbound email parsing. Customers continue to email us as before; agents manually transcribe correspondence into the ticket system.
+- Rejected: A customer-facing login/portal, or automatic inbound email ingestion that would create/update tickets from incoming mail.
+- Why: The assignment's 10 required goals only define two roles — agent and supervisor — and never mention a customer role. The stretch list's only email-related idea is an outbound daily digest, a different feature entirely. Inbound email ingestion is a subsystem on its own. Keeping email as a manual, human-mediated channel is a deliberate good for now.
 
 ## Decision 2
 
