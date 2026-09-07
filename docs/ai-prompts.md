@@ -19,3 +19,20 @@ A full written analysis covering all of the above, recommending Node/Express/Pos
 ### What you corrected
 Nothing needed correcting at this stage — used as the baseline plan, but several individual decisions inside it were revisited once I thought about them more concretely.
 
+
+2.
+## <What you were trying to achieve>
+How to handle customer reply and how sla clock will be resumed.
+
+### Prompt
+How a customer's reply — sent by email, since there's no customer portal — should be captured and how it should resume the SLA clock, given the agent won't necessarily see the email the moment it arrives.
+
+### What you got
+Initially, a suggestion to add an agent-editable customer_replied_at field the agent could backdate to the real email time, framed as "more accurate" for the SLA calculation.
+
+### What you corrected
+This will allow the agent control the measurement, with no way to verify it against anything. He can fill the customer replied late and his response is on time. The AI agreed and reversed the recommendation to: the SLA clock resumes at the system-generated timestamp of when the agent logs the reply, full stop — no backdating field at all. This is documented as a reversed decision in docs/decisions.md (Decision 3).
+
+3. 
+
+
