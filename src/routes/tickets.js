@@ -15,9 +15,9 @@ const VALID_PRIORITIES = ['low', 'normal', 'high', 'urgent'];
 router.post('/', async (req, res) => {
   const { subject, description, requesterName, requesterEmail, priority, category } = req.body;
 
-  if (!subject || !requesterName || !requesterEmail || !priority || !category) {
+  if (!subject || !description || !requesterName || !requesterEmail || !priority || !category) {
     return res.status(400).json({
-      error: 'subject, requesterName, requesterEmail, priority, and category are required.',
+      error: 'subject, description , requesterName, requesterEmail, priority, and category are required.',
     });
   }
   if (!VALID_PRIORITIES.includes(priority)) {
@@ -28,30 +28,69 @@ router.post('/', async (req, res) => {
     `INSERT INTO tickets (subject, description, requester_name, requester_email, priority, category)
      VALUES ($1, $2, $3, $4, $5, $6)
      RETURNING *`,
-    [subject, description || null, requesterName, requesterEmail, priority, category]
+    [subject, description, requesterName, requesterEmail, priority, category]
   );
 
   res.status(201).json(result.rows[0]);
 });
 
-// GET /tickets — for now, a simple role-scoped list (full search/filter/pagination is a later stage).
-// Agents see only tickets where they are assignee or collaborator; supervisors see everything
-// (excluding archived tickets from the default view either way).
+// GET /tickets — server-side search, filter, sort, and pagination.
+// Query params: q, status, priority, category, assigneeId, sort, order, page, pageSize.
+// Role scoping (agents see only their own+collaborated tickets) is always applied
+// first, then the caller's filters narrow further — never the other way around.
+const ALLOWED_SORT_COLUMNS = {
+  created_at: 't.created_at',
+  updated_at: 't.updated_at',
+  // Priority isn't alphabetically ordered by severity, so it needs an explicit
+  // CASE mapping rather than sorting the enum's text value directly.
+  priority: `CASE t.priority WHEN 'urgent' THEN 1 WHEN 'high' THEN 2 WHEN 'normal' THEN 3 WHEN 'low' THEN 4 END`,
+};
+
 router.get('/', async (req, res) => {
-  let result;
-  if (req.user.role === 'supervisor') {
-    result = await pool.query(`SELECT * FROM tickets WHERE archived_at IS NULL ORDER BY created_at DESC`);
-  } else {
-    result = await pool.query(
-      `SELECT DISTINCT t.* FROM tickets t
-       LEFT JOIN ticket_collaborators tc ON tc.ticket_id = t.id
-       WHERE t.archived_at IS NULL
-         AND (t.primary_assignee_id = $1 OR tc.agent_id = $1)
-       ORDER BY t.created_at DESC`,
-      [req.user.id]
+  const { q, status, priority, category, assigneeId, sort, order, page, pageSize } = req.query;
+
+  const conditions = ['t.archived_at IS NULL'];
+  const values = [];
+  const addParam = (v) => {
+    values.push(v);
+    return `$${values.length}`;
+  };
+
+  if (req.user.role !== 'supervisor') {
+    const p = addParam(req.user.id);
+    conditions.push(
+      `(t.primary_assignee_id = ${p} OR EXISTS (SELECT 1 FROM ticket_collaborators tc WHERE tc.ticket_id = t.id AND tc.agent_id = ${p}))`
     );
   }
-  res.json({ data: result.rows, total: result.rows.length });
+
+  if (q) {
+    const p = addParam(`%${q}%`);
+    conditions.push(`(t.subject ILIKE ${p} OR t.description ILIKE ${p})`);
+  }
+  if (status) conditions.push(`t.status = ${addParam(status)}`);
+  if (priority) conditions.push(`t.priority = ${addParam(priority)}`);
+  if (category) conditions.push(`t.category = ${addParam(category)}`);
+  if (assigneeId) conditions.push(`t.primary_assignee_id = ${addParam(assigneeId)}`);
+
+  const whereClause = conditions.join(' AND ');
+  const sortColumn = ALLOWED_SORT_COLUMNS[sort] || ALLOWED_SORT_COLUMNS.created_at;
+  const sortOrder = String(order).toLowerCase() === 'asc' ? 'ASC' : 'DESC';
+
+  const safePageSize = Math.min(Math.max(parseInt(pageSize, 10) || 20, 1), 100);
+  const safePage = Math.max(parseInt(page, 10) || 1, 1);
+  const offset = (safePage - 1) * safePageSize;
+
+  const countResult = await pool.query(`SELECT COUNT(*) FROM tickets t WHERE ${whereClause}`, values);
+  const total = parseInt(countResult.rows[0].count, 10);
+
+  const limitParam = addParam(safePageSize);
+  const offsetParam = addParam(offset);
+  const dataResult = await pool.query(
+    `SELECT t.* FROM tickets t WHERE ${whereClause} ORDER BY ${sortColumn} ${sortOrder} LIMIT ${limitParam} OFFSET ${offsetParam}`,
+    values
+  );
+
+  res.json({ data: dataResult.rows, total, page: safePage, pageSize: safePageSize });
 });
 
 // GET /tickets/:id — visibility check via canView.

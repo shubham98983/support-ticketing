@@ -1,11 +1,12 @@
 // SLA calculation — pure functions only. No database, no HTTP.
 // Takes a plain ticket object (or the relevant fields off one) and a
 // reference "now" time, returns elapsed seconds or a status string.
+// Keeping this pure makes it directly unit-testable without any mocking.
 
 const PRIORITY_TARGET_SECONDS = {
   urgent: 2 * 3600,
   high: 6 * 3600,
-  medium: 12 * 3600,
+  normal: 12 * 3600,
   low: 24 * 3600,
 };
 
