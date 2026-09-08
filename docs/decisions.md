@@ -29,14 +29,21 @@ Rejected: A separate, agent-editable customer_replied_at field, backdatable to t
 
 Why: There is no way to verify a backdated timestamp against anything (no email ingestion exists, per Decision 1), and the field would be filled in by the exact person whose performance it measures — a direct conflict of interest, gameable to make the agent's own SLA compliance look better. A system-generated timestamp is a known, honest, bounded approximation (worst case: understates real customer wait time by however long an agent's email-checking cadence is); a backdatable field is an unverifiable, unbounded one.
 
+Later reversed: Initially proposed the backdatable customer_replied_at field as the "more accurate" option  — reversed once I recognized that unverifiable self-reported timestamps don't make the metric more accurate, they just make it easier to game while looking more precise.
+
 ## Decision 4
 
-- **Chose:**
-- **Rejected:**
-- **Why:**
+Chose: Any agent who is already primary assignee or an existing collaborator on a ticket can directly add another agent as a collaborator, with no approval step. A supervisor can add or remove any agent as collaborator on any ticket, same way.
+
+Rejected: A request/accept workflow where a proposed collaborator must approve before being added (would require a new collaboration_requests table, its own small state machine, new authorization rules, and new UI).
+
+Why: The spec says collaborators "can be added," with no mention of an approval step. A request/accept flow is a legitimate feature but is scope creep relative to the 10 required goals — it doesn't appear in the goals or the stretch list, and the assignment explicitly says not to build optional features at the expense of mandatory ones. Direct-add achieves the underlying need (an agent bringing in help, a supervisor having full control) at a fraction of the implementation cost.
 
 ## Decision 5
 
-- **Chose:**
-- **Rejected:**
-- **Why:**
+Chose: Fixed SLA target response times per priority (urgent: 2h, high: 6h, normal: 12h, low: 24h) and a fixed 1-hour "at risk" window, both as hardcoded constants in src/domain/sla.js rather than configurable/stored values.
+
+Rejected: A priority_sla_policy table making these numbers editable without a code change (this is explicitly listed as an optional stretch idea — "SLA policies that vary by priority" — not a required goal).
+
+Why: The spec requires a target response time per priority to exist and be enforced, but doesn't require it to be configurable. Hardcoding keeps the required behavior fully correct while avoiding stretch-scope work. The specific numbers are an arbitrary placeholder — worth saying plainly in an interview rather than inventing a fake justification for them.
+
