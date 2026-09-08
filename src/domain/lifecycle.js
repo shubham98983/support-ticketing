@@ -71,8 +71,10 @@ function buildPatch(ticket, targetStatus, now) {
   if (currentStatus === 'Pending' && targetStatus === 'Open') {
     // Pending is ending now: fold the time just spent paused into the
     // running total, then clear the "currently pending since" marker.
+    // Rounded to whole seconds — sla_paused_seconds is an INTEGER column,
+    // and (now - pendingStart) / 1000 almost never lands on a whole number.
     const pendingStart = new Date(ticket.sla_pending_started_at);
-    const justPausedSeconds = Math.max(0, (now - pendingStart) / 1000);
+    const justPausedSeconds = Math.max(0, Math.round((now - pendingStart) / 1000));
     patch.sla_paused_seconds = (ticket.sla_paused_seconds || 0) + justPausedSeconds;
     patch.sla_pending_started_at = null;
   }

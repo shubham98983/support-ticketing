@@ -1,11 +1,13 @@
 const express = require('express');
 const pool = require('./db');
 const authRoutes = require('./routes/auth');
+const ticketRoutes = require('./routes/tickets');
 
 const app = express();
 app.use(express.json());
 
 app.use('/auth', authRoutes);
+app.use('/tickets', ticketRoutes);
 
 app.get('/health', async (req, res) => {
   try {

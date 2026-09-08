@@ -165,6 +165,24 @@ test('a full multi-cycle sequence works and correctly accumulates two separate P
   assert.strictEqual(elapsedHours, 3.5);
 });
 
+test('Pending -> Open produces a whole-number sla_paused_seconds even when the interval is not a round number of seconds', () => {
+  // Regression test: 55,867ms (55.867s) elapsed in Pending previously
+  // produced a fractional value that Postgres rejected as invalid input
+  // for its INTEGER column. This must always come out as a whole number.
+  const pendingStart = new Date('2026-01-01T12:00:00.000Z');
+  const now = new Date('2026-01-01T12:00:55.867Z');
+  const ticket = baseTicket({
+    status: 'Pending',
+    sla_pending_started_at: pendingStart,
+    sla_paused_seconds: 0,
+  });
+
+  const result = transition(ticket, 'Open', now);
+  assert.strictEqual(result.ok, true);
+  assert.strictEqual(Number.isInteger(result.patch.sla_paused_seconds), true);
+  assert.strictEqual(result.patch.sla_paused_seconds, 56); // rounded from 55.867
+});
+
 test('An archived ticket rejects any transition', () => {
   const ticket = baseTicket({ status: 'Open', archived_at: new Date() });
   const result = transition(ticket, 'Pending');
