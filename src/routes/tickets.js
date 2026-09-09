@@ -15,9 +15,9 @@ const VALID_PRIORITIES = ['low', 'normal', 'high', 'urgent'];
 router.post('/', async (req, res) => {
   const { subject, description, requesterName, requesterEmail, priority, category } = req.body;
 
-  if (!subject || !description || !requesterName || !requesterEmail || !priority || !category) {
+  if (!subject || !requesterName || !requesterEmail || !priority || !category) {
     return res.status(400).json({
-      error: 'subject, description , requesterName, requesterEmail, priority, and category are required.',
+      error: 'subject, requesterName, requesterEmail, priority, and category are required.',
     });
   }
   if (!VALID_PRIORITIES.includes(priority)) {
@@ -28,26 +28,16 @@ router.post('/', async (req, res) => {
     `INSERT INTO tickets (subject, description, requester_name, requester_email, priority, category)
      VALUES ($1, $2, $3, $4, $5, $6)
      RETURNING *`,
-    [subject, description, requesterName, requesterEmail, priority, category]
+    [subject, description || null, requesterName, requesterEmail, priority, category]
   );
 
   res.status(201).json(result.rows[0]);
 });
 
-// GET /tickets — server-side search, filter, sort, and pagination.
-// Query params: q, status, priority, category, assigneeId, sort, order, page, pageSize.
-// Role scoping (agents see only their own+collaborated tickets) is always applied
-// first, then the caller's filters narrow further — never the other way around.
-const ALLOWED_SORT_COLUMNS = {
-  created_at: 't.created_at',
-  updated_at: 't.updated_at',
-  // Priority isn't alphabetically ordered by severity, so it needs an explicit
-  // CASE mapping rather than sorting the enum's text value directly.
-  priority: `CASE t.priority WHEN 'urgent' THEN 1 WHEN 'high' THEN 2 WHEN 'normal' THEN 3 WHEN 'low' THEN 4 END`,
-};
-
-router.get('/', async (req, res) => {
-  const { q, status, priority, category, assigneeId, sort, order, page, pageSize } = req.query;
+// Shared by GET / and GET /export.csv — role scoping and every filter must
+// behave identically in both places, or "export what I'm looking at" lies.
+function buildTicketFilterQuery(req) {
+  const { q, status, priority, category, assigneeId } = req.query;
 
   const conditions = ['t.archived_at IS NULL'];
   const values = [];
@@ -72,7 +62,25 @@ router.get('/', async (req, res) => {
   if (category) conditions.push(`t.category = ${addParam(category)}`);
   if (assigneeId) conditions.push(`t.primary_assignee_id = ${addParam(assigneeId)}`);
 
-  const whereClause = conditions.join(' AND ');
+  return { whereClause: conditions.join(' AND '), values, addParam };
+}
+
+// GET /tickets — server-side search, filter, sort, and pagination.
+// Query params: q, status, priority, category, assigneeId, sort, order, page, pageSize.
+// Role scoping (agents see only their own+collaborated tickets) is always applied
+// first, then the caller's filters narrow further — never the other way around.
+const ALLOWED_SORT_COLUMNS = {
+  created_at: 't.created_at',
+  updated_at: 't.updated_at',
+  // Priority isn't alphabetically ordered by severity, so it needs an explicit
+  // CASE mapping rather than sorting the enum's text value directly.
+  priority: `CASE t.priority WHEN 'urgent' THEN 1 WHEN 'high' THEN 2 WHEN 'normal' THEN 3 WHEN 'low' THEN 4 END`,
+};
+
+router.get('/', async (req, res) => {
+  const { sort, order, page, pageSize } = req.query;
+  const { whereClause, values, addParam } = buildTicketFilterQuery(req);
+
   const sortColumn = ALLOWED_SORT_COLUMNS[sort] || ALLOWED_SORT_COLUMNS.created_at;
   const sortOrder = String(order).toLowerCase() === 'asc' ? 'ASC' : 'DESC';
 
@@ -91,6 +99,144 @@ router.get('/', async (req, res) => {
   );
 
   res.json({ data: dataResult.rows, total, page: safePage, pageSize: safePageSize });
+});
+
+// GET /tickets/export.csv — same filters as the list, no pagination: exports
+// every matching row the caller can see. Route is declared before /:id so
+// Express doesn't try to interpret "export.csv" as a ticket id.
+router.get('/export.csv', async (req, res) => {
+  const { whereClause, values } = buildTicketFilterQuery(req);
+
+  const result = await pool.query(
+    `SELECT id, subject, status, priority, category, requester_name, requester_email,
+            primary_assignee_id, created_at, updated_at
+     FROM tickets t WHERE ${whereClause} ORDER BY t.created_at DESC`,
+    values
+  );
+
+  const columns = [
+    'id', 'subject', 'status', 'priority', 'category',
+    'requester_name', 'requester_email', 'primary_assignee_id', 'created_at', 'updated_at',
+  ];
+
+  const csvEscape = (value) => {
+    if (value === null || value === undefined) return '';
+    const str = String(value);
+    return /[",\n]/.test(str) ? `"${str.replace(/"/g, '""')}"` : str;
+  };
+
+  const rows = [columns.join(',')];
+  for (const ticket of result.rows) {
+    rows.push(columns.map((c) => csvEscape(ticket[c])).join(','));
+  }
+
+  res.setHeader('Content-Type', 'text/csv');
+  res.setHeader('Content-Disposition', 'attachment; filename="tickets.csv"');
+  res.send(rows.join('\n'));
+});
+
+// POST /tickets/bulk/reassign and /bulk/close — supervisor-only (see
+// authorize.canBulkAct). Each ticket in the selection is processed
+// independently: one ticket being ineligible never blocks the others, and
+// the response always reports per-ticket success/failure with a reason,
+// never an all-or-nothing failure of the whole batch.
+function requireBulkPermission(req, res, next) {
+  const result = authorize.canBulkAct(req.user);
+  if (!result.ok) return res.status(403).json({ error: result.reason });
+  next();
+}
+
+router.post('/bulk/reassign', requireBulkPermission, async (req, res) => {
+  const { ticketIds, agentId } = req.body;
+  if (!Array.isArray(ticketIds) || ticketIds.length === 0 || !agentId) {
+    return res.status(400).json({ error: 'ticketIds (non-empty array) and agentId are required.' });
+  }
+
+  const results = [];
+
+  for (const ticketId of ticketIds) {
+    const ticketResult = await pool.query('SELECT * FROM tickets WHERE id = $1', [ticketId]);
+    const ticket = ticketResult.rows[0];
+
+    if (!ticket) {
+      results.push({ ticketId, ok: false, reason: 'Ticket not found.' });
+      continue;
+    }
+    if (ticket.archived_at) {
+      results.push({ ticketId, ok: false, reason: 'Cannot reassign an archived ticket.' });
+      continue;
+    }
+
+    const authResult = authorize.canReassign(req.user, ticket, agentId);
+    if (!authResult.ok) {
+      results.push({ ticketId, ok: false, reason: authResult.reason });
+      continue;
+    }
+
+    await pool.query('UPDATE tickets SET primary_assignee_id = $1, updated_at = now() WHERE id = $2', [
+      agentId,
+      ticketId,
+    ]);
+    await pool.query(
+      `INSERT INTO ticket_events (ticket_id, event_type, from_value, to_value, actor_id)
+       VALUES ($1, 'reassignment', $2, $3, $4)`,
+      [ticketId, String(ticket.primary_assignee_id), String(agentId), req.user.id]
+    );
+
+    results.push({ ticketId, ok: true });
+  }
+
+  res.json({ results });
+});
+
+router.post('/bulk/close', requireBulkPermission, async (req, res) => {
+  const { ticketIds } = req.body;
+  if (!Array.isArray(ticketIds) || ticketIds.length === 0) {
+    return res.status(400).json({ error: 'ticketIds (non-empty array) is required.' });
+  }
+
+  const results = [];
+
+  for (const ticketId of ticketIds) {
+    const ticketResult = await pool.query('SELECT * FROM tickets WHERE id = $1', [ticketId]);
+    const ticket = ticketResult.rows[0];
+
+    if (!ticket) {
+      results.push({ ticketId, ok: false, reason: 'Ticket not found.' });
+      continue;
+    }
+    if (ticket.archived_at) {
+      results.push({ ticketId, ok: false, reason: 'Cannot close an archived ticket.' });
+      continue;
+    }
+
+    // Reuses the exact same domain function as the single-ticket transition
+    // endpoint — a ticket not currently Resolved is correctly refused here,
+    // which is exactly the "some tickets in the selection may not be
+    // eligible" case the spec describes, not a bug to work around.
+    const transitionResult = lifecycle.transition(ticket, 'Closed');
+    if (!transitionResult.ok) {
+      results.push({ ticketId, ok: false, reason: transitionResult.reason });
+      continue;
+    }
+
+    const fields = Object.keys(transitionResult.patch);
+    const setClause = fields.map((f, i) => `${f} = $${i + 1}`).join(', ');
+    const values = fields.map((f) => transitionResult.patch[f]);
+    await pool.query(`UPDATE tickets SET ${setClause} WHERE id = $${fields.length + 1}`, [
+      ...values,
+      ticketId,
+    ]);
+    await pool.query(
+      `INSERT INTO ticket_events (ticket_id, event_type, from_value, to_value, actor_id)
+       VALUES ($1, 'status_change', $2, $3, $4)`,
+      [ticketId, ticket.status, 'Closed', req.user.id]
+    );
+
+    results.push({ ticketId, ok: true });
+  }
+
+  res.json({ results });
 });
 
 // GET /tickets/:id — visibility check via canView.
