@@ -2,12 +2,16 @@ const express = require('express');
 const pool = require('./db');
 const authRoutes = require('./routes/auth');
 const ticketRoutes = require('./routes/tickets');
+const alertRoutes = require('./routes/alerts');
+const dashboardRoutes = require('./routes/dashboard');
 
 const app = express();
 app.use(express.json());
 
 app.use('/auth', authRoutes);
 app.use('/tickets', ticketRoutes);
+app.use('/alerts', alertRoutes);
+app.use('/dashboard', dashboardRoutes);
 
 app.get('/health', async (req, res) => {
   try {
