@@ -1,17 +1,21 @@
 const express = require('express');
+const cors = require('cors');
 const pool = require('./db');
 const authRoutes = require('./routes/auth');
 const ticketRoutes = require('./routes/tickets');
 const alertRoutes = require('./routes/alerts');
 const dashboardRoutes = require('./routes/dashboard');
+const userRoutes = require('./routes/users');
 
 const app = express();
+app.use(cors());
 app.use(express.json());
 
 app.use('/auth', authRoutes);
 app.use('/tickets', ticketRoutes);
 app.use('/alerts', alertRoutes);
 app.use('/dashboard', dashboardRoutes);
+app.use('/users', userRoutes);
 
 app.get('/health', async (req, res) => {
   try {

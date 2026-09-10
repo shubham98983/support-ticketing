@@ -11,7 +11,7 @@ If you did not use AI at all, say so here, and describe your process instead.
 Requirements analysis and architecture planning.
 
 ### Prompt
-Act as a principal/senior software engineer with 20+ years of experience designing and shipping production web applications. I am giving you a assignment how would you have approached this. Compare different architecutre options , database schema etc. and discuss possible approaches and decisions.
+Act as a principal/senior software engineer with 20+ years of experience designing and shipping production web applications. I am giving you a assignment how would you have approached this. Compare different architecture options , database schema etc. and discuss possible approaches and decisions.
 
 ### What you got
 A full written analysis covering all of the above, recommending Node/Express/Postgres/React, with an explicit alternative-architectures comparison (including a Firebase/Supabase-as-backend option).
@@ -72,15 +72,3 @@ Got the reply-adding route, collaborator add/remove functionality, and ticket hi
 ### What you corrected
 Here also requirements are clear so not much correction are needed. just reviewed the code andd tested the end point and by logging customer reply the ticket should move from pending->open.
 
-6. 
-## <What you were trying to achieve>
-Building server-side search, filter, sort, and pagination
-
-### Prompt
-Everything working accordingly now build the reply-adding route including the specific rule that logging a customer reply while Pending should also resume the SLA clock, collaborator add/remove, and the ticket history/timeline endpoint.
-
-### What you got
-Got the reply-adding route, collaborator add/remove functionality, and ticket history/timeline endpoint implemented. The customer-reply flow also correctly resumes the SLA clock when a ticket is in Pending status.
-
-### What you corrected
-Here also requirements are clear so not much correction are needed. just reviewed the code andd tested the end point and by logging customer reply the ticket should move from pending->open.
