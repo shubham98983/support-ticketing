@@ -1,5 +1,7 @@
 const API_BASE = 'http://localhost:3000';
 
+// ---- Token helpers ----
+
 function getToken() {
   return localStorage.getItem('token');
 }
@@ -11,6 +13,47 @@ function setToken(token) {
 function clearToken() {
   localStorage.removeItem('token');
 }
+
+/**
+ * Decodes a JWT payload without verification (client-side only).
+ * Used to restore user session from localStorage on page load.
+ */
+function decodeToken(token) {
+  try {
+    const payload = token.split('.')[1];
+    const decoded = JSON.parse(atob(payload));
+    // Check expiry
+    if (decoded.exp && decoded.exp * 1000 < Date.now()) {
+      return null; // expired
+    }
+    return decoded;
+  } catch {
+    return null;
+  }
+}
+
+/**
+ * Attempts to restore the user from a stored JWT.
+ * Returns the user object or null.
+ */
+function restoreUser() {
+  const token = getToken();
+  if (!token) return null;
+  const payload = decodeToken(token);
+  if (!payload) {
+    clearToken();
+    return null;
+  }
+  return { id: payload.id, email: payload.email, name: payload.name, role: payload.role };
+}
+
+// ---- Listeners for 401 (session expiry) ----
+let onUnauthorized = null;
+function setOnUnauthorized(callback) {
+  onUnauthorized = callback;
+}
+
+// ---- Core request function ----
 
 async function request(path, { method = 'GET', body } = {}) {
   const headers = { 'Content-Type': 'application/json' };
@@ -24,6 +67,12 @@ async function request(path, { method = 'GET', body } = {}) {
   });
 
   const data = await res.json().catch(() => ({}));
+
+  if (res.status === 401) {
+    clearToken();
+    if (onUnauthorized) onUnauthorized();
+    throw new Error('Session expired. Please log in again.');
+  }
 
   if (!res.ok) {
     throw new Error(data.error || `Request failed with status ${res.status}`);
@@ -58,4 +107,4 @@ export const api = {
   getUsers: () => request('/users'),
 };
 
-export { getToken, setToken, clearToken };
+export { getToken, setToken, clearToken, restoreUser, setOnUnauthorized };

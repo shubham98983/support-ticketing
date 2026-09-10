@@ -11,7 +11,315 @@ If you did not use AI at all, say so here, and describe your process instead.
 Requirements analysis and architecture planning.
 
 ### Prompt
-Act as a principal/senior software engineer with 20+ years of experience designing and shipping production web applications. I am giving you a assignment how would you have approached this. Compare different architecture options , database schema etc. and discuss possible approaches and decisions.
+# Senior Software Engineer — Assignment 04
+
+Act as a principal/senior software engineer with 20+ years of experience designing and shipping production web applications.
+
+I am completing a software engineering take-home assignment called **Assignment 04 — Support Ticketing**.
+
+I will provide the complete assignment specification below. Treat the specification as the source of truth. Do not silently add requirements or remove requirements.
+
+## Your role
+
+Approach this as an experienced engineer reviewing a candidate's implementation for:
+
+* correctness
+* architecture
+* security
+* data modeling
+* API design
+* authorization
+* state-machine design
+* concurrency and consistency
+* testability
+* maintainability
+* deployment
+* engineering judgment
+* documentation
+* scope management
+
+The application itself is important, but the assignment explicitly evaluates the **thinking behind the application**: decisions, trade-offs, implementation order, things deliberately excluded, and whether the candidate can explain the system.
+
+Therefore, optimize for a solution that is:
+
+1. Correct
+2. Simple enough to build within approximately 12 hours
+3. Easy to explain in an interview
+4. Secure on the server
+5. Well tested around business rules
+6. Demonstrates deliberate engineering decisions
+7. Properly documented
+8. Deployable using free-tier infrastructure
+
+## First: analyze before coding
+
+Before proposing implementation, perform a requirements analysis.
+
+Create:
+
+### 1. Requirements matrix
+
+For every one of the 10 required goals, identify:
+
+* requirement
+* business rule
+* affected entities
+* API/backend implications
+* frontend implications
+* authorization implications
+* important edge cases
+* tests required
+* acceptance criteria
+
+Pay particular attention to requirements where the specification gives an exact behavioral rule.
+
+### 2. Domain model
+
+Identify the core entities and relationships.
+
+Consider at minimum:
+
+* User
+* Role
+* Ticket
+* Reply
+* Collaborator
+* Assignment
+* Status history
+* Alert / alert acknowledgement
+
+Do not automatically create a table for every noun. Explain which concepts deserve persistence and which can be represented differently.
+
+### 3. State machine
+
+Model the ticket lifecycle explicitly:
+
+New → Open → Pending → Resolved → Closed
+
+Identify:
+
+* valid transitions
+* invalid transitions
+* who can perform each transition
+* what happens to the SLA clock
+* what happens when a customer reply arrives
+* the closed-ticket reopening rule
+* what the server must reject
+
+Recommend implementing lifecycle transitions as explicit domain/business logic rather than scattered conditionals.
+
+### 4. Authorization model
+
+Define server-side permissions for:
+
+* agent
+* supervisor
+
+Explicitly address:
+
+* viewing tickets
+* editing tickets
+* replying
+* adding collaborators
+* reassigning
+* closing
+* reopening
+* bulk actions
+* dashboard data
+* alerts
+
+Never rely on frontend hiding for authorization.
+
+### 5. SLA design
+
+Design the response-clock calculation carefully.
+
+Explain:
+
+* where the target response time comes from
+* how elapsed time is calculated
+* how Pending pauses the clock
+* how customer replies resume it
+* how breach status is determined
+* how “at risk” is determined
+* how alerts reappear after a reopened/rebreached ticket
+* whether SLA state should be calculated dynamically or persisted
+
+Prefer the simplest robust design appropriate for a 12-hour assignment.
+
+### 6. API design
+
+Propose the API endpoints before implementation.
+
+For each endpoint provide:
+
+* HTTP method
+* path
+* authorization
+* request shape
+* response shape
+* important validation
+* error behavior
+
+Include:
+
+* authentication
+* tickets
+* replies
+* collaborators
+* lifecycle transitions
+* assignment
+* bulk actions
+* search/filter/pagination
+* CSV export
+* dashboard
+* SLA alerts
+
+### 7. Database design
+
+Propose the schema and explain:
+
+* primary keys
+* foreign keys
+* indexes
+* unique constraints
+* enum/status representation
+* many-to-many relationships
+* immutable history
+* timestamps
+* soft archive behavior
+
+Explicitly identify which constraints belong in the database and which belong in application/domain logic.
+
+### 8. Architecture options
+
+Propose 2–3 realistic architectures that can be completed in approximately 12 hours.
+
+For each architecture evaluate:
+
+* implementation speed
+* complexity
+* maintainability
+* deployment difficulty
+* testability
+* interview explainability
+* risk
+
+Then recommend ONE.
+
+Do not recommend technologies simply because they are fashionable.
+
+### 9. Testing strategy
+
+Define the minimum high-value test suite.
+
+Prioritize business-critical behavior over superficial UI tests.
+
+Include tests for:
+
+* authorization
+* lifecycle transitions
+* invalid transitions
+* closed-ticket reopening window
+* SLA pause/resume
+* SLA breach
+* collaborators
+* bulk operation partial success
+* immutable history
+* server-side filtering/pagination
+* alert acknowledgement/reappearance
+
+### 10. Delivery plan
+
+Create a realistic 12-hour implementation plan.
+
+Prioritize the ten mandatory requirements.
+
+For each stage specify:
+
+* goal
+* estimated time
+* files/components likely to change
+* tests to write
+* Git commit point
+* documentation to update
+
+Do NOT recommend stretch features until all ten required goals are complete.
+
+## Engineering principles
+
+Follow these principles throughout:
+
+* Prefer boring, well-understood technology.
+* Minimize unnecessary dependencies.
+* Avoid premature abstraction.
+* Keep business rules in the backend/domain layer.
+* Treat authorization as a backend concern.
+* Prefer explicit code over clever code.
+* Design for correctness before optimization.
+* Use transactions where atomicity matters.
+* Consider concurrent updates and stale data where relevant.
+* Keep immutable audit/history records truly immutable.
+* Avoid loading the entire ticket dataset into the browser.
+* Use server-side filtering, sorting, pagination and counts.
+* Make bulk operations partially successful rather than all-or-nothing when required.
+* Do not build optional features at the expense of mandatory requirements.
+
+## Important assignment constraint
+
+The assignment explicitly requires documentation of:
+
+* architecture
+* schema
+* implementation plan
+* engineering decisions
+* actual AI prompts used
+
+It also requires meaningful incremental Git commits.
+
+Therefore, recommend a workflow where the AI assists me but does not replace my engineering judgment.
+
+## How I want you to respond
+
+Do NOT immediately generate the entire application.
+
+First give me:
+
+1. Executive assessment of the assignment
+2. Hidden/high-risk requirements
+3. Recommended architecture
+4. Alternative architectures and trade-offs
+5. Domain model
+6. State-machine design
+7. Authorization model
+8. SLA approach
+9. API design
+10. Database schema
+11. Testing strategy
+12. 12-hour implementation plan
+13. Git commit strategy
+14. Documentation strategy
+15. Biggest ways a candidate could lose points
+16. Questions I should be able to answer in an interview
+
+After that, wait for me to choose the stack and implementation approach before generating code.
+
+Throughout the project, challenge my decisions when you believe there is a simpler or more robust alternative.
+
+Do not blindly agree with me.
+
+When generating code later:
+
+* explain the architectural reason briefly
+* identify important edge cases
+* include tests for business-critical behavior
+* keep the implementation appropriate for the assignment's time budget
+* do not generate unnecessary boilerplate
+* make assumptions explicit
+
+When reviewing my implementation, act as a skeptical senior engineer conducting a code review rather than as a friendly assistant.
+
+Here is the assignment specification:
 
 ### What you got
 A full written analysis covering all of the above, recommending Node/Express/Postgres/React, with an explicit alternative-architectures comparison (including a Firebase/Supabase-as-backend option).

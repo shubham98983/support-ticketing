@@ -1,27 +1,29 @@
 import { useEffect, useState } from 'react';
+import { useParams, useNavigate } from 'react-router-dom';
 import { api } from './api';
 
-// Mirrors src/domain/lifecycle.js's VALID_TRANSITIONS — kept in sync manually
-// since the frontend has no access to the backend's pure function directly.
-// The backend is still the source of truth: this only controls which
-// buttons are OFFERED, and every click still goes through the real
-// transition endpoint, which independently re-validates and can reject it.
 const VALID_NEXT_STATUSES = {
   New: ['Open'],
   Open: ['Pending', 'Resolved'],
   Pending: ['Open'],
   Resolved: ['Closed'],
-  Closed: ['Open'], // only within the reopen window — backend enforces this
+  Closed: ['Open'],
 };
 
-export function TicketDetail({ ticketId, user, onBack }) {
+export function TicketDetail({ user }) {
+  const { id } = useParams();
+  const navigate = useNavigate();
+  const ticketId = Number(id);
+
   const [ticket, setTicket] = useState(null);
   const [timeline, setTimeline] = useState([]);
   const [users, setUsers] = useState([]);
   const [replyBody, setReplyBody] = useState('');
-  const [replyKind, setReplyKind] = useState('agent'); // 'agent' | 'internal' | 'customer'
+  const [replyKind, setReplyKind] = useState('agent');
   const [error, setError] = useState('');
   const [showTimeline, setShowTimeline] = useState(false);
+  const [transitioning, setTransitioning] = useState('');
+  const [replying, setReplying] = useState(false);
 
   async function load() {
     try {
@@ -39,25 +41,33 @@ export function TicketDetail({ ticketId, user, onBack }) {
   }, [ticketId]);
 
   async function loadTimeline() {
-    const events = await api.getTimeline(ticketId);
-    setTimeline(events);
-    setShowTimeline(true);
-  }
-
-  async function handleTransition(targetStatus) {
-    setError('');
     try {
-      await api.transitionTicket(ticketId, targetStatus);
-      load();
+      const events = await api.getTimeline(ticketId);
+      setTimeline(events);
+      setShowTimeline(true);
     } catch (err) {
       setError(err.message);
     }
   }
 
+  async function handleTransition(targetStatus) {
+    setError('');
+    setTransitioning(targetStatus);
+    try {
+      await api.transitionTicket(ticketId, targetStatus);
+      load();
+    } catch (err) {
+      setError(err.message);
+    } finally {
+      setTransitioning('');
+    }
+  }
+
   async function handleReply(e) {
     e.preventDefault();
-    if (!replyBody.trim()) return;
+    if (!replyBody.trim() || replying) return;
     setError('');
+    setReplying(true);
     try {
       await api.addReply(ticketId, {
         body: replyBody,
@@ -68,105 +78,159 @@ export function TicketDetail({ ticketId, user, onBack }) {
       load();
     } catch (err) {
       setError(err.message);
+    } finally {
+      setReplying(false);
     }
   }
 
   async function handleAddCollaborator() {
     const agentId = prompt('Add which agent as collaborator?\n' + users.map((u) => `${u.id}: ${u.name}`).join('\n'));
     if (!agentId) return;
+    const parsed = Number(agentId);
+    if (Number.isNaN(parsed)) {
+      setError('Invalid agent ID.');
+      return;
+    }
     try {
-      await api.addCollaborator(ticketId, Number(agentId));
+      await api.addCollaborator(ticketId, parsed);
       load();
     } catch (err) {
       setError(err.message);
     }
   }
 
-  if (!ticket) return <div className="page">{error ? <p style={{ color: 'red' }}>{error}</p> : 'Loading...'}</div>;
+  if (!ticket) {
+    return (
+      <div className="page">
+        {error ? (
+          <div className="card" style={{ textAlign: 'center', padding: 32 }}>
+            <p className="text-danger" style={{ margin: '0 0 12px' }}>{error}</p>
+            <button className="btn btn-secondary" onClick={() => navigate('/tickets')}>← Back to tickets</button>
+          </div>
+        ) : (
+          <div className="loading"><div className="spinner" /> Loading ticket…</div>
+        )}
+      </div>
+    );
+  }
 
   const nextStatuses = VALID_NEXT_STATUSES[ticket.status] || [];
   const isPending = ticket.status === 'Pending';
+  const assignee = users.find(u => u.id === ticket.primary_assignee_id);
 
   return (
     <div className="page">
-      <button className="secondary" onClick={onBack} style={{ marginBottom: 12 }}>&larr; Back to list</button>
+      <button className="btn btn-ghost" onClick={() => navigate('/tickets')} style={{ marginBottom: 16 }}>
+        ← Back to tickets
+      </button>
 
       <div className="card">
-        <div style={{ display: 'flex', justifyContent: 'space-between' }}>
-          <h2>#{ticket.id} {ticket.subject}</h2>
+        <div className="detail-header">
           <div>
-            <span className={`pill pill-${ticket.status}`}>{ticket.status}</span>{' '}
+            <h2>
+              <span style={{ color: 'var(--text-muted)', fontWeight: 400 }}>#{ticket.id}</span>{' '}
+              {ticket.subject}
+            </h2>
+            <div className="detail-meta">
+              Requester: <strong>{ticket.requester_name}</strong> ({ticket.requester_email})
+              {' · '}Category: <strong>{ticket.category}</strong>
+              {assignee && <>{' · '}Assigned to: <strong>{assignee.name}</strong></>}
+            </div>
+          </div>
+          <div className="detail-pills">
+            <span className={`pill pill-${ticket.status}`}>{ticket.status}</span>
             <span className={`pill pill-${ticket.priority}`}>{ticket.priority}</span>
           </div>
         </div>
-        <p style={{ color: '#4b5563' }}>{ticket.description}</p>
-        <p style={{ fontSize: 13, color: '#6b7280' }}>
-          Requester: {ticket.requester_name} ({ticket.requester_email}) &middot; Category: {ticket.category}
-        </p>
 
-        <div style={{ marginTop: 12 }}>
+        {ticket.description && (
+          <div className="detail-desc">{ticket.description}</div>
+        )}
+
+        <div className="detail-actions">
           {nextStatuses.map((s) => (
-            <button key={s} className="secondary" style={{ marginRight: 8 }} onClick={() => handleTransition(s)}>
-              Move to {s}
+            <button key={s} className="btn btn-secondary btn-sm"
+                    disabled={transitioning === s}
+                    onClick={() => handleTransition(s)}>
+              {transitioning === s ? 'Moving…' : `Move to ${s}`}
             </button>
           ))}
-          <button className="secondary" onClick={handleAddCollaborator}>+ Add Collaborator</button>{' '}
-          <button className="secondary" onClick={loadTimeline}>View Timeline</button>
+          <button className="btn btn-secondary btn-sm" onClick={handleAddCollaborator}>+ Collaborator</button>
+          <button className="btn btn-ghost btn-sm" onClick={loadTimeline}>
+            {showTimeline ? 'Refresh Timeline' : 'View Timeline'}
+          </button>
         </div>
-        {error && <p style={{ color: 'red', marginTop: 8 }}>{error}</p>}
+
+        {error && <div className="login-error mt-3">{error} <button className="btn btn-ghost btn-sm" onClick={() => setError('')}>✕</button></div>}
       </div>
 
       {showTimeline && (
         <div className="card">
           <h3>Timeline</h3>
-          {timeline.length === 0 && <p style={{ color: '#6b7280' }}>No history yet.</p>}
+          {timeline.length === 0 && (
+            <div className="empty-state" style={{ padding: 20 }}>
+              <p>No history yet.</p>
+            </div>
+          )}
           {timeline.map((ev) => (
             <div key={ev.id} className="timeline-item">
-              <strong>{ev.event_type}</strong>
-              {ev.from_value && ` — ${ev.from_value} → ${ev.to_value}`}
-              {' '}({new Date(ev.created_at).toLocaleString()})
-              {ev.reason && ` — ${ev.reason}`}
+              <div className="timeline-dot" />
+              <div>
+                <strong>{ev.event_type}</strong>
+                {ev.from_value && ` — ${ev.from_value} → ${ev.to_value}`}
+                {' '}
+                <span style={{ color: 'var(--text-muted)' }}>({new Date(ev.created_at).toLocaleString()})</span>
+                {ev.reason && <span style={{ color: 'var(--text-secondary)' }}> — {ev.reason}</span>}
+              </div>
             </div>
           ))}
         </div>
       )}
 
       <div className="card">
-        <h3>Replies</h3>
-        {ticket.replies.length === 0 && <p style={{ color: '#6b7280' }}>No replies yet.</p>}
+        <h3>Replies ({ticket.replies.length})</h3>
+        {ticket.replies.length === 0 && (
+          <div className="empty-state" style={{ padding: 20 }}>
+            <p>No replies yet. Start the conversation below.</p>
+          </div>
+        )}
         {ticket.replies.map((r) => (
           <div key={r.id} className={`reply ${r.is_internal ? 'internal' : r.is_customer_reply ? 'customer' : ''}`}>
             <div className="reply-meta">
-              {r.is_internal ? 'Internal note' : r.is_customer_reply ? 'Customer reply (logged)' : 'Agent reply'}
-              {' '}&middot; {new Date(r.created_at).toLocaleString()}
+              {r.is_internal ? '🔒 Internal note' : r.is_customer_reply ? '💬 Customer reply (logged)' : '📧 Agent reply'}
+              {' · '}{new Date(r.created_at).toLocaleString()}
             </div>
-            {r.body}
+            <div className="reply-body">{r.body}</div>
           </div>
         ))}
 
-        <form onSubmit={handleReply} style={{ marginTop: 12 }}>
+        <form onSubmit={handleReply} style={{ marginTop: 16 }}>
           <textarea
-            style={{ width: '100%', padding: 8 }}
             rows={3}
-            placeholder="Write a reply..."
+            placeholder="Write a reply…"
             value={replyBody}
             onChange={(e) => setReplyBody(e.target.value)}
+            maxLength={5000}
           />
-          <div style={{ marginTop: 8 }}>
-            <label style={{ marginRight: 12 }}>
-              <input type="radio" checked={replyKind === 'agent'} onChange={() => setReplyKind('agent')} /> My reply to customer
+          <div className="radio-group">
+            <label className="radio-label">
+              <input type="radio" checked={replyKind === 'agent'} onChange={() => setReplyKind('agent')} />
+              Reply to customer
             </label>
-            <label style={{ marginRight: 12 }}>
-              <input type="radio" checked={replyKind === 'internal'} onChange={() => setReplyKind('internal')} /> Internal note
+            <label className="radio-label">
+              <input type="radio" checked={replyKind === 'internal'} onChange={() => setReplyKind('internal')} />
+              Internal note
             </label>
             {isPending && (
-              <label>
+              <label className="radio-label">
                 <input type="radio" checked={replyKind === 'customer'} onChange={() => setReplyKind('customer')} />
-                {' '}Log customer's reply (resumes SLA clock)
+                Log customer reply (resumes SLA)
               </label>
             )}
           </div>
-          <button className="primary" type="submit" style={{ marginTop: 8 }}>Add Reply</button>
+          <button className="btn btn-primary mt-3" type="submit" disabled={replying || !replyBody.trim()}>
+            {replying ? 'Sending…' : 'Add Reply'}
+          </button>
         </form>
       </div>
     </div>

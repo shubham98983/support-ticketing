@@ -9,38 +9,87 @@ export function Dashboard() {
     api.getDashboard().then(setData).catch((err) => setError(err.message));
   }, []);
 
-  if (error) return <div className="page"><p style={{ color: 'red' }}>{error}</p></div>;
-  if (!data) return <div className="page">Loading...</div>;
+  if (error) {
+    return (
+      <div className="page">
+        <div className="card" style={{ textAlign: 'center', padding: 32 }}>
+          <p className="text-danger" style={{ margin: '0 0 12px' }}>{error}</p>
+          <button className="btn btn-secondary" onClick={() => { setError(''); api.getDashboard().then(setData).catch((err) => setError(err.message)); }}>
+            Retry
+          </button>
+        </div>
+      </div>
+    );
+  }
+
+  if (!data) {
+    return <div className="page"><div className="loading"><div className="spinner" /> Loading dashboard…</div></div>;
+  }
 
   const maxWeekCount = Math.max(...data.resolvedPerWeek.map((w) => w.count), 1);
 
   return (
     <div className="page">
-      <h2>Dashboard</h2>
-
-      <div className="grid-4">
-        <StatCard label="Open" value={data.openCount} />
-        <StatCard label="Pending (on customer)" value={data.pendingCount} />
-        <StatCard label="Resolved this week" value={data.resolvedThisWeek} />
-        <StatCard label="Breaching SLA" value={data.breachingCount} highlight={data.breachingCount > 0} />
+      <div className="page-header">
+        <h2>Dashboard</h2>
       </div>
 
-      <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12 }}>
+      <div className="grid-4">
+        <div className="stat-card">
+          <div className="stat-icon blue">📂</div>
+          <div className="stat-number">{data.openCount}</div>
+          <div className="stat-label">Open tickets</div>
+        </div>
+        <div className="stat-card">
+          <div className="stat-icon amber">⏳</div>
+          <div className="stat-number">{data.pendingCount}</div>
+          <div className="stat-label">Pending on customer</div>
+        </div>
+        <div className="stat-card">
+          <div className="stat-icon green">✅</div>
+          <div className="stat-number">{data.resolvedThisWeek}</div>
+          <div className="stat-label">Resolved this week</div>
+        </div>
+        <div className="stat-card">
+          <div className="stat-icon red">🚨</div>
+          <div className={`stat-number ${data.breachingCount > 0 ? 'danger' : ''}`}>{data.breachingCount}</div>
+          <div className="stat-label">Breaching SLA</div>
+        </div>
+      </div>
+
+      <div className="dash-grid">
         <div className="card">
           <h3>By Status</h3>
-          <table><tbody>
-            {Object.entries(data.byStatus).map(([status, count]) => (
-              <tr key={status}><td><span className={`pill pill-${status}`}>{status}</span></td><td>{count}</td></tr>
-            ))}
-          </tbody></table>
+          <div className="table-wrap">
+            <table>
+              <tbody>
+                {Object.entries(data.byStatus).map(([status, count]) => (
+                  <tr key={status}>
+                    <td><span className={`pill pill-${status}`}>{status}</span></td>
+                    <td style={{ fontWeight: 600 }}>{count}</td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
         </div>
         <div className="card">
           <h3>By Agent</h3>
-          <table><tbody>
-            {Object.entries(data.byAgent).map(([name, count]) => (
-              <tr key={name}><td>{name}</td><td>{count}</td></tr>
-            ))}
-          </tbody></table>
+          <div className="table-wrap">
+            <table>
+              <tbody>
+                {Object.entries(data.byAgent).map(([name, count]) => (
+                  <tr key={name}>
+                    <td>{name}</td>
+                    <td style={{ fontWeight: 600 }}>{count}</td>
+                  </tr>
+                ))}
+                {Object.keys(data.byAgent).length === 0 && (
+                  <tr><td colSpan={2} style={{ color: 'var(--text-muted)', fontStyle: 'italic' }}>No assigned tickets</td></tr>
+                )}
+              </tbody>
+            </table>
+          </div>
         </div>
       </div>
 
@@ -48,22 +97,14 @@ export function Dashboard() {
         <h3>Resolved per week (last 8 weeks)</h3>
         <div className="bar-chart">
           {data.resolvedPerWeek.map((w) => (
-            <div key={w.weekStart} style={{ flex: 1, textAlign: 'center' }}>
-              <div className="bar" style={{ height: `${(w.count / maxWeekCount) * 90}px` }} title={`${w.count} resolved`} />
+            <div key={w.weekStart} className="bar-column">
+              <span className="bar-count">{w.count || ''}</span>
+              <div className="bar" style={{ height: `${Math.max((w.count / maxWeekCount) * 90, 3)}px` }} title={`${w.count} resolved`} />
               <div className="bar-label">{w.weekStart.slice(5)}</div>
             </div>
           ))}
         </div>
       </div>
-    </div>
-  );
-}
-
-function StatCard({ label, value, highlight }) {
-  return (
-    <div className="card">
-      <div className="stat-number" style={{ color: highlight ? '#dc2626' : '#1a1a1a' }}>{value}</div>
-      <div className="stat-label">{label}</div>
     </div>
   );
 }

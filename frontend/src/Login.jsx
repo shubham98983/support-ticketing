@@ -2,7 +2,7 @@ import { useState } from 'react';
 import { api, setToken } from './api';
 
 export function Login({ onLogin }) {
-  const [email, setEmail] = useState('agent@demo.com');
+  const [email, setEmail] = useState('agent1@demo.com');
   const [password, setPassword] = useState('password123');
   const [error, setError] = useState('');
   const [loading, setLoading] = useState(false);
@@ -23,37 +23,61 @@ export function Login({ onLogin }) {
   }
 
   return (
-    <div style={{ maxWidth: 360, margin: '80px auto', fontFamily: 'sans-serif' }}>
-      <h1>Support Ticketing</h1>
-      <form onSubmit={handleSubmit}>
-        <div style={{ marginBottom: 12 }}>
-          <label>Email</label>
-          <br />
-          <input
-            type="email"
-            value={email}
-            onChange={(e) => setEmail(e.target.value)}
-            style={{ width: '100%', padding: 8 }}
-          />
+    <div className="login-page">
+      <div className="login-card">
+        <div style={{ textAlign: 'center', marginBottom: 8 }}>
+          <div style={{
+            width: 48, height: 48, borderRadius: 12,
+            background: 'linear-gradient(135deg, #3b82f6, #8b5cf6)',
+            display: 'inline-flex', alignItems: 'center', justifyContent: 'center',
+            marginBottom: 16
+          }}>
+            <svg width="24" height="24" fill="none" viewBox="0 0 24 24" stroke="white" strokeWidth="2">
+              <path strokeLinecap="round" strokeLinejoin="round" d="M18.364 5.636l-3.536 3.536m0 5.656l3.536 3.536M9.172 9.172L5.636 5.636m3.536 9.192l-3.536 3.536M21 12a9 9 0 11-18 0 9 9 0 0118 0zm-5 0a4 4 0 11-8 0 4 4 0 018 0z" />
+            </svg>
+          </div>
         </div>
-        <div style={{ marginBottom: 12 }}>
-          <label>Password</label>
-          <br />
-          <input
-            type="password"
-            value={password}
-            onChange={(e) => setPassword(e.target.value)}
-            style={{ width: '100%', padding: 8 }}
-          />
-        </div>
-        {error && <p style={{ color: 'red' }}>{error}</p>}
-        <button type="submit" disabled={loading} style={{ width: '100%', padding: 10 }}>
-          {loading ? 'Logging in...' : 'Log in'}
-        </button>
-      </form>
-      <p style={{ fontSize: 12, color: '#666', marginTop: 16 }}>
-        Demo: agent@demo.com or supervisor@demo.com, password: password123
-      </p>
+        <h1 style={{ textAlign: 'center' }}>Support Ticketing</h1>
+        <p className="login-subtitle" style={{ textAlign: 'center' }}>
+          Sign in to manage your support queue
+        </p>
+
+        <form onSubmit={handleSubmit}>
+          {error && <div className="login-error">{error}</div>}
+
+          <div className="login-field">
+            <label htmlFor="login-email">Email</label>
+            <input
+              id="login-email"
+              type="email"
+              value={email}
+              onChange={(e) => { setEmail(e.target.value); setError(''); }}
+              placeholder="you@company.com"
+              required
+            />
+          </div>
+          <div className="login-field">
+            <label htmlFor="login-password">Password</label>
+            <input
+              id="login-password"
+              type="password"
+              value={password}
+              onChange={(e) => { setPassword(e.target.value); setError(''); }}
+              placeholder="••••••••"
+              required
+            />
+          </div>
+
+          <button type="submit" className="login-btn" disabled={loading}>
+            {loading ? 'Signing in…' : 'Sign in'}
+          </button>
+        </form>
+
+        <p className="login-hint">
+          Demo accounts: <code>agent1@demo.com</code> or <code>supervisor@demo.com</code><br />
+          Password: <code>password123</code>
+        </p>
+      </div>
     </div>
   );
 }

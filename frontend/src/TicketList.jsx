@@ -1,4 +1,5 @@
 import { useEffect, useState } from 'react';
+import { useNavigate } from 'react-router-dom';
 import { api } from './api';
 
 function StatusPill({ status }) {
@@ -8,7 +9,8 @@ function PriorityPill({ priority }) {
   return <span className={`pill pill-${priority}`}>{priority}</span>;
 }
 
-export function TicketList({ user, onSelectTicket }) {
+export function TicketList({ user }) {
+  const navigate = useNavigate();
   const [tickets, setTickets] = useState([]);
   const [total, setTotal] = useState(0);
   const [users, setUsers] = useState([]);
@@ -19,10 +21,12 @@ export function TicketList({ user, onSelectTicket }) {
   const [selected, setSelected] = useState(new Set());
   const [showCreate, setShowCreate] = useState(false);
   const [error, setError] = useState('');
+  const [loading, setLoading] = useState(true);
   const pageSize = 10;
 
   async function load() {
     try {
+      setLoading(true);
       const params = { ...filters, sort, order, page, pageSize };
       Object.keys(params).forEach((k) => !params[k] && delete params[k]);
       const result = await api.getTickets(params);
@@ -30,6 +34,8 @@ export function TicketList({ user, onSelectTicket }) {
       setTotal(result.total);
     } catch (err) {
       setError(err.message);
+    } finally {
+      setLoading(false);
     }
   }
 
@@ -42,6 +48,11 @@ export function TicketList({ user, onSelectTicket }) {
     api.getUsers().then(setUsers).catch(() => {});
   }, []);
 
+  // Clear selection when filters change
+  useEffect(() => {
+    setSelected(new Set());
+  }, [filters, sort, order, page]);
+
   function toggleSelect(id) {
     const next = new Set(selected);
     next.has(id) ? next.delete(id) : next.add(id);
@@ -49,24 +60,57 @@ export function TicketList({ user, onSelectTicket }) {
   }
 
   async function handleBulkClose() {
-    const results = await api.bulkClose([...selected]);
-    reportBulkResults(results);
-    setSelected(new Set());
-    load();
+    try {
+      const results = await api.bulkClose([...selected]);
+      reportBulkResults(results);
+      setSelected(new Set());
+      load();
+    } catch (err) {
+      setError(err.message);
+    }
   }
 
   async function handleBulkReassign() {
     const agentId = prompt('Reassign selected tickets to which agent id?\n' + users.map((u) => `${u.id}: ${u.name}`).join('\n'));
     if (!agentId) return;
-    const results = await api.bulkReassign([...selected], Number(agentId));
-    reportBulkResults(results);
-    setSelected(new Set());
-    load();
+    const parsed = Number(agentId);
+    if (Number.isNaN(parsed)) {
+      setError('Invalid agent ID. Please enter a number.');
+      return;
+    }
+    try {
+      const results = await api.bulkReassign([...selected], parsed);
+      reportBulkResults(results);
+      setSelected(new Set());
+      load();
+    } catch (err) {
+      setError(err.message);
+    }
   }
 
   function reportBulkResults({ results }) {
-    const lines = results.map((r) => `#${r.ticketId}: ${r.ok ? 'OK' : 'FAILED - ' + r.reason}`);
+    const lines = results.map((r) => `#${r.ticketId}: ${r.ok ? '✓ OK' : '✗ FAILED — ' + r.reason}`);
     alert(lines.join('\n'));
+  }
+
+  async function handleExportCSV() {
+    try {
+      const token = localStorage.getItem('token');
+      const query = new URLSearchParams(filters).toString();
+      const res = await fetch(`http://localhost:3000/tickets/export.csv${query ? `?${query}` : ''}`, {
+        headers: { Authorization: `Bearer ${token}` },
+      });
+      if (!res.ok) throw new Error('Export failed');
+      const blob = await res.blob();
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = 'tickets.csv';
+      a.click();
+      URL.revokeObjectURL(url);
+    } catch (err) {
+      setError(err.message);
+    }
   }
 
   const isAgent = user.role === 'agent';
@@ -75,39 +119,43 @@ export function TicketList({ user, onSelectTicket }) {
 
   function renderRow(t) {
     return (
-      <tr key={t.id} className="ticket-row" onClick={() => onSelectTicket(t.id)}>
+      <tr key={t.id} className="ticket-row" onClick={() => navigate(`/tickets/${t.id}`)}>
         {user.role === 'supervisor' && (
           <td className="checkbox-cell" onClick={(e) => e.stopPropagation()}>
             <input type="checkbox" checked={selected.has(t.id)} onChange={() => toggleSelect(t.id)} />
           </td>
         )}
-        <td>#{t.id} {t.subject}</td>
+        <td>
+          <span style={{ color: 'var(--text-muted)', marginRight: 4 }}>#{t.id}</span>
+          {t.subject}
+        </td>
         <td><StatusPill status={t.status} /></td>
         <td><PriorityPill priority={t.priority} /></td>
-        <td>{t.category}</td>
-        <td>{new Date(t.created_at).toLocaleDateString()}</td>
+        <td style={{ color: 'var(--text-secondary)' }}>{t.category}</td>
+        <td style={{ color: 'var(--text-secondary)', whiteSpace: 'nowrap' }}>{new Date(t.created_at).toLocaleDateString()}</td>
       </tr>
     );
   }
 
   return (
     <div className="page">
-      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 12 }}>
+      <div className="page-header">
         <h2>Tickets</h2>
-        <div>
-          <a href={`http://localhost:3000/tickets/export.csv?${new URLSearchParams(filters).toString()}`}
-             target="_blank" rel="noreferrer" style={{ marginRight: 12 }}>
-            Export CSV
-          </a>
-          <button className="primary" onClick={() => setShowCreate(true)}>+ New Ticket</button>
+        <div className="page-actions">
+          <button className="btn btn-secondary btn-sm" onClick={handleExportCSV}>
+            ↓ Export CSV
+          </button>
+          <button className="btn btn-primary btn-sm" onClick={() => setShowCreate(true)}>
+            + New Ticket
+          </button>
         </div>
       </div>
 
       {showCreate && <CreateTicketForm onClose={() => setShowCreate(false)} onCreated={() => { setShowCreate(false); load(); }} />}
-      {error && <p style={{ color: 'red' }}>{error}</p>}
+      {error && <div className="login-error" style={{ marginBottom: 16 }}>{error} <button className="btn btn-ghost btn-sm" onClick={() => setError('')}>✕</button></div>}
 
       <div className="filters">
-        <input placeholder="Search subject/description..." value={filters.q}
+        <input placeholder="Search subject / description…" value={filters.q}
                onChange={(e) => { setPage(1); setFilters({ ...filters, q: e.target.value }); }} />
         <select value={filters.status} onChange={(e) => { setPage(1); setFilters({ ...filters, status: e.target.value }); }}>
           <option value="">All statuses</option>
@@ -129,36 +177,62 @@ export function TicketList({ user, onSelectTicket }) {
       </div>
 
       {user.role === 'supervisor' && selected.size > 0 && (
-        <div className="card">
-          {selected.size} selected —{' '}
-          <button className="secondary" onClick={handleBulkReassign}>Bulk Reassign</button>{' '}
-          <button className="secondary" onClick={handleBulkClose}>Bulk Close</button>
+        <div className="bulk-bar">
+          <span>{selected.size} selected</span>
+          <button className="btn btn-secondary btn-sm" onClick={handleBulkReassign}>Reassign</button>
+          <button className="btn btn-secondary btn-sm" onClick={handleBulkClose}>Close</button>
         </div>
       )}
 
-      {isAgent ? (
+      {loading ? (
+        <div className="loading"><div className="spinner" /> Loading tickets…</div>
+      ) : isAgent ? (
         <>
           <div className="card">
             <h3>My Tickets ({myTickets.length})</h3>
-            <table><tbody>{myTickets.map(renderRow)}</tbody></table>
+            <div className="table-wrap">
+              <table>
+                <thead><tr><th>Ticket</th><th>Status</th><th>Priority</th><th>Category</th><th>Created</th></tr></thead>
+                <tbody>
+                  {myTickets.map(renderRow)}
+                  {myTickets.length === 0 && <tr><td colSpan={5} style={{ textAlign: 'center', color: 'var(--text-muted)', padding: 24 }}>No tickets assigned to you</td></tr>}
+                </tbody>
+              </table>
+            </div>
           </div>
           <div className="card">
             <h3>Collaborating On ({collabTickets.length})</h3>
-            <table><tbody>{collabTickets.map(renderRow)}</tbody></table>
+            <div className="table-wrap">
+              <table>
+                <thead><tr><th>Ticket</th><th>Status</th><th>Priority</th><th>Category</th><th>Created</th></tr></thead>
+                <tbody>
+                  {collabTickets.map(renderRow)}
+                  {collabTickets.length === 0 && <tr><td colSpan={5} style={{ textAlign: 'center', color: 'var(--text-muted)', padding: 24 }}>Not collaborating on any tickets</td></tr>}
+                </tbody>
+              </table>
+            </div>
           </div>
         </>
       ) : (
         <div className="card">
-          <table><tbody>{tickets.map(renderRow)}</tbody></table>
+          <div className="table-wrap">
+            <table>
+              <thead><tr>{user.role === 'supervisor' && <th style={{ width: 36 }}></th>}<th>Ticket</th><th>Status</th><th>Priority</th><th>Category</th><th>Created</th></tr></thead>
+              <tbody>
+                {tickets.map(renderRow)}
+                {tickets.length === 0 && <tr><td colSpan={6} style={{ textAlign: 'center', color: 'var(--text-muted)', padding: 24 }}>No tickets found</td></tr>}
+              </tbody>
+            </table>
+          </div>
         </div>
       )}
 
-      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-        <span>{total} total</span>
-        <div>
-          <button className="secondary" disabled={page <= 1} onClick={() => setPage(page - 1)}>Prev</button>{' '}
-          <span>Page {page}</span>{' '}
-          <button className="secondary" disabled={page * pageSize >= total} onClick={() => setPage(page + 1)}>Next</button>
+      <div className="pagination">
+        <span>{total} total ticket{total !== 1 ? 's' : ''}</span>
+        <div className="pagination-controls">
+          <button className="btn btn-secondary btn-sm" disabled={page <= 1} onClick={() => setPage(page - 1)}>← Prev</button>
+          <span>Page {page}</span>
+          <button className="btn btn-secondary btn-sm" disabled={page * pageSize >= total} onClick={() => setPage(page + 1)}>Next →</button>
         </div>
       </div>
     </div>
@@ -168,35 +242,45 @@ export function TicketList({ user, onSelectTicket }) {
 function CreateTicketForm({ onClose, onCreated }) {
   const [form, setForm] = useState({ subject: '', description: '', requesterName: '', requesterEmail: '', priority: 'normal', category: '' });
   const [error, setError] = useState('');
+  const [submitting, setSubmitting] = useState(false);
 
   async function handleSubmit(e) {
     e.preventDefault();
+    if (submitting) return;
+    setSubmitting(true);
+    setError('');
     try {
       await api.createTicket(form);
       onCreated();
     } catch (err) {
       setError(err.message);
+    } finally {
+      setSubmitting(false);
     }
   }
 
   return (
-    <div className="card">
+    <div className="create-form">
       <h3>New Ticket</h3>
       <form onSubmit={handleSubmit}>
-        <div className="filters">
-          <input placeholder="Subject" required value={form.subject} onChange={(e) => setForm({ ...form, subject: e.target.value })} />
-          <input placeholder="Requester name" required value={form.requesterName} onChange={(e) => setForm({ ...form, requesterName: e.target.value })} />
-          <input placeholder="Requester email" required value={form.requesterEmail} onChange={(e) => setForm({ ...form, requesterEmail: e.target.value })} />
-          <input placeholder="Category" required value={form.category} onChange={(e) => setForm({ ...form, category: e.target.value })} />
+        <div className="filters" style={{ marginBottom: 12 }}>
+          <input placeholder="Subject *" required value={form.subject} onChange={(e) => setForm({ ...form, subject: e.target.value })} maxLength={200} />
+          <input placeholder="Requester name *" required value={form.requesterName} onChange={(e) => setForm({ ...form, requesterName: e.target.value })} maxLength={100} />
+          <input placeholder="Requester email *" type="email" required value={form.requesterEmail} onChange={(e) => setForm({ ...form, requesterEmail: e.target.value })} maxLength={200} />
+          <input placeholder="Category *" required value={form.category} onChange={(e) => setForm({ ...form, category: e.target.value })} maxLength={50} />
           <select value={form.priority} onChange={(e) => setForm({ ...form, priority: e.target.value })}>
             {['low', 'normal', 'high', 'urgent'].map((p) => <option key={p} value={p}>{p}</option>)}
           </select>
         </div>
-        <textarea placeholder="Description" style={{ width: '100%', padding: 8, marginBottom: 8 }} rows={3}
-                  value={form.description} onChange={(e) => setForm({ ...form, description: e.target.value })} />
-        {error && <p style={{ color: 'red' }}>{error}</p>}
-        <button className="primary" type="submit">Create</button>{' '}
-        <button className="secondary" type="button" onClick={onClose}>Cancel</button>
+        <textarea placeholder="Description…" rows={3} style={{ marginBottom: 12 }}
+                  value={form.description} onChange={(e) => setForm({ ...form, description: e.target.value })} maxLength={5000} />
+        {error && <div className="login-error" style={{ marginBottom: 12 }}>{error}</div>}
+        <div style={{ display: 'flex', gap: 8 }}>
+          <button className="btn btn-primary" type="submit" disabled={submitting}>
+            {submitting ? 'Creating…' : 'Create Ticket'}
+          </button>
+          <button className="btn btn-secondary" type="button" onClick={onClose}>Cancel</button>
+        </div>
       </form>
     </div>
   );
