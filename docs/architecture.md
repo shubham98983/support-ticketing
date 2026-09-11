@@ -15,6 +15,8 @@ Answer each of these, in your own words, once the system has taken real shape.
 - Where does each piece run?
 
 1. Database: Supabase's managed Postgres, cloud-hosted.
+2. Backend: https://support-ticketing-wya1.onrender.com
+3. Frontend: https://support-ticketing-six.vercel.app
 
 
 - What is the request path for one representative user action, end to end?
