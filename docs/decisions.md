@@ -15,7 +15,7 @@ Why: The assignment's 10 required goals only define two roles agent and supervis
 
 ## Decision 2
 
-Chose: Replies carry an is_internal flag (internal note vs customer-visible) plus a distinct "Log customer reply" action that is separate from an agent's own outgoing reply, even though both are stored in the same replies table with is_internal = false.
+Chose: Replies carry an is_internal flag (internal note and customer-visible) plus a distinct "Log customer reply" action that is separate from an agent's own outgoing reply, even though both are stored in the same replies table with is_internal = false.
 
 Rejected: Treating any customer-visible reply as equivalent, with no distinct action for "this represents what the customer said."
 
@@ -47,3 +47,10 @@ Rejected: A priority_sla_policy table making these numbers editable without a co
 
 Why: The spec requires a target response time per priority to exist and be enforced, but doesn't require it to be configurable. Hardcoding keeps the required behavior fully correct. The specific numbers are an arbitrary placeholder.
 
+## Decision 6
+
+Chose: The dashboard's "resolved this week" count filters on tickets.resolved_at Timestamp instead of state.
+
+Rejected: Filtering on current status = 'Resolved' (which would undercount since a resolved ticket that's since been formally closed would drop out of the count).
+
+Why: A supervisor reading this number wants to know real throughput — how many problems actually got fixed this week — independent of how promptly agents formalize the paperwork afterward. resolved_at is the one timestamp in the schema that captures "solved," permanently, regardless of what happens to the ticket's status afterward.

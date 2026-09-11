@@ -405,7 +405,7 @@ Now proceed to stage 10 build the frontend of our system using React. Make it si
 Setup the fronted of our system. Setup the frontend using react vite and app.jsx , dashboard.jsx , navbar.jsx , TicketDetail.jsx etc. and run it locally. 
 
 ### What you corrected
-Improved the UI and told to preserve the login state with route based url instead of port path.
+Improved the UI and told to preserve the login state with route based url instead of port path.Tested the functionality of the UI components.
 
 
 

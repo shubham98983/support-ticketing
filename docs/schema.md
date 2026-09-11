@@ -5,60 +5,60 @@ Answer each of these, in your own words.
 - Table by table: what columns and types does each one have?
 
 users(agent) table
-- `id` — SERIAL PK
-- `email` — TEXT, UNIQUE, NOT NULL
-- `password_hash` — TEXT, NOT NULL
-- `name` — TEXT, NOT NULL
-- `role` — ENUM('agent', 'supervisor'), NOT NULL
-- `created_at` — TIMESTAMPTZ, defaults to now()
+- `id` - SERIAL PK
+- `email` - TEXT, UNIQUE, NOT NULL
+- `password_hash` - TEXT, NOT NULL
+- `name` - TEXT, NOT NULL
+- `role` - ENUM('agent', 'supervisor'), NOT NULL
+- `created_at` - TIMESTAMPTZ, defaults to now()
 
 tickets table
-- `id` — SERIAL PK
-- `subject` — TEXT, NOT NULL
-- `description` — TEXT
-- `requester_name` — TEXT, NOT NULL
-- `requester_email` — TEXT, NOT NULL
-- `priority` — ENUM('low', 'normal', 'high', 'urgent'), NOT NULL
-- `category` — TEXT, NOT NULL
-- `status` — ENUM('New', 'Open', 'Pending', 'Resolved', 'Closed'), NOT NULL
-- `primary_assignee_id` — INTEGER FK to `users(id)`, nullable
-- `created_at`, `updated_at` — TIMESTAMPTZ
-- `archived_at` — TIMESTAMPTZ, nullable
-- `resolved_at`, `closed_at` — TIMESTAMPTZ, nullable
-- `sla_pending_started_at` — TIMESTAMPTZ, nullable
-- `sla_paused_seconds` — INTEGER
-- `epoch_started_at` — TIMESTAMPTZ, NOT NULL
+- `id` - SERIAL PK
+- `subject` - TEXT, NOT NULL
+- `description` - TEXT
+- `requester_name` - TEXT, NOT NULL
+- `requester_email` - TEXT, NOT NULL
+- `priority` - ENUM('low', 'normal', 'high', 'urgent'), NOT NULL
+- `category` - TEXT, NOT NULL
+- `status` - ENUM('New', 'Open', 'Pending', 'Resolved', 'Closed'), NOT NULL
+- `primary_assignee_id` - INTEGER FK to `users(id)`, nullable
+- `created_at`, `updated_at` - TIMESTAMPTZ
+- `archived_at` - TIMESTAMPTZ, nullable
+- `resolved_at`, `closed_at` - TIMESTAMPTZ, nullable
+- `sla_pending_started_at` - TIMESTAMPTZ, nullable
+- `sla_paused_seconds` - INTEGER
+- `epoch_started_at` - TIMESTAMPTZ, NOT NULL
 
 ticket_collaborators table
-- `ticket_id` — INTEGER FK to `tickets(id)`
-- `agent_id` — INTEGER FK to `users(id)`
-- `added_at` — TIMESTAMPTZ
+- `ticket_id` - INTEGER FK to `tickets(id)`
+- `agent_id` - INTEGER FK to `users(id)`
+- `added_at` - TIMESTAMPTZ
 - Primary key is `(ticket_id, agent_id)`
 
 replies table
-- `id` — SERIAL PK
-- `ticket_id` — INTEGER FK to `tickets(id)`
-- `author_id` — INTEGER FK to `users(id)`
-- `body` — TEXT, NOT NULL
-- `is_internal` — BOOLEAN
-- `is_customer_reply` — BOOLEAN
-- `created_at` — TIMESTAMPTZ
+- `id` - SERIAL PK
+- `ticket_id` - INTEGER FK to `tickets(id)`
+- `author_id` - INTEGER FK to `users(id)`
+- `body` - TEXT, NOT NULL
+- `is_internal` - BOOLEAN
+- `is_customer_reply` - BOOLEAN
+- `created_at` - TIMESTAMPTZ
 
 ticket_events table
-- `id` — SERIAL PK
-- `ticket_id` — INTEGER FK to `tickets(id)`
-- `event_type` — ENUM
-- `from_value`, `to_value` — TEXT, nullable
-- `actor_id` — INTEGER FK to `users(id)`
-- `reason` — TEXT, nullable
-- `created_at` — TIMESTAMPTZ
+- `id` - SERIAL PK
+- `ticket_id` - INTEGER FK to `tickets(id)`
+- `event_type` - ENUM
+- `from_value`, `to_value` - TEXT, nullable
+- `actor_id` - INTEGER FK to `users(id)`
+- `reason` - TEXT, nullable
+- `created_at` - TIMESTAMPTZ
 
 alert_acknowledgements table
-- `id` — SERIAL PK
-- `ticket_id` — INTEGER FK to `tickets(id)`
-- `epoch_started_at` — TIMESTAMPTZ
-- `acknowledged_by` — INTEGER FK to `users(id)`
-- `acknowledged_at` — TIMESTAMPTZ
+- `id` - SERIAL PK
+- `ticket_id` - INTEGER FK to `tickets(id)`
+- `epoch_started_at` - TIMESTAMPTZ
+- `acknowledged_by` - INTEGER FK to `users(id)`
+- `acknowledged_at` - TIMESTAMPTZ
 - Unique constraint on `(ticket_id, epoch_started_at)`
 
 
@@ -81,7 +81,7 @@ alert_acknowledgements table
 
 1. The main deliberate denormalisation is `ticket_events`. Instead of having separate tables for status history, assignment history, and collaborator history, they are all stored in one `ticket_events` table using `event_type`, `from_value`, and `to_value`. This makes it easier to retrieve one chronological timeline for a ticket, at the cost of some type safety.
 
-2. `alert_acknowledgements.epoch_started_at` is also deliberately copied from `tickets` rather than being a foreign key. This means that when a ticket is reopened and its epoch changes, old acknowledgements no longer match the current epoch.
+2. `alert_acknowledgements.epoch_started_at` is also copied from `tickets` rather than being a foreign key. This means that when a ticket is reopened and its epoch changes, old acknowledgements no longer match the current epoch.
 
 
 - What would break first if this had 100x the data?
