@@ -9,8 +9,7 @@ Fill this in and commit it. This is the first file we open.
 
 ## Notes for the reviewer
 
-<Anything we should know before opening the link — e.g. your host sleeps when idle and the first
-request can take up to a minute.>
+The first sign-in and dashboard load may take a little time. Please allow a few seconds for the application to load.
 
 ## Demo credentials
 
