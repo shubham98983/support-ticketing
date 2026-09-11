@@ -2,6 +2,8 @@ import { useEffect, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { api } from './api';
 
+const API_BASE = import.meta.env.VITE_API_BASE_URL || 'http://localhost:3000';
+
 function StatusPill({ status }) {
   return <span className={`pill pill-${status}`}>{status}</span>;
 }
@@ -97,7 +99,7 @@ export function TicketList({ user }) {
     try {
       const token = localStorage.getItem('token');
       const query = new URLSearchParams(filters).toString();
-      const res = await fetch(`http://localhost:3000/tickets/export.csv${query ? `?${query}` : ''}`, {
+      const res = await fetch(`${API_BASE}/tickets/export.csv${query ? `?${query}` : ''}`, {
         headers: { Authorization: `Bearer ${token}` },
       });
       if (!res.ok) throw new Error('Export failed');
@@ -116,7 +118,7 @@ export function TicketList({ user }) {
   async function handleRestore(id) {
     try {
       const token = localStorage.getItem('token');
-      const res = await fetch(`http://localhost:3000/tickets/${id}/restore`, {
+      const res = await fetch(`${API_BASE}/tickets/${id}/restore`, {
         method: 'POST',
         headers: { Authorization: `Bearer ${token}` },
       });
