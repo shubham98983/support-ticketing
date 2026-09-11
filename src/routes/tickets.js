@@ -23,12 +23,14 @@ router.post('/', async (req, res) => {
   if (!VALID_PRIORITIES.includes(priority)) {
     return res.status(400).json({ error: `priority must be one of: ${VALID_PRIORITIES.join(', ')}` });
   }
-
+   
+  const primaryAssigneeId = req.user.role === 'agent' ? req.user.id : null;
+  
   const result = await pool.query(
-    `INSERT INTO tickets (subject, description, requester_name, requester_email, priority, category)
-     VALUES ($1, $2, $3, $4, $5, $6)
+    `INSERT INTO tickets (subject, description, requester_name, requester_email, priority, category, primary_assignee_id)
+     VALUES ($1, $2, $3, $4, $5, $6, $7)
      RETURNING *`,
-    [subject, description || null, requesterName, requesterEmail, priority, category]
+    [subject, description, requesterName, requesterEmail, priority, category,  primaryAssigneeId]
   );
 
   res.status(201).json(result.rows[0]);
