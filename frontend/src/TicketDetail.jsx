@@ -24,6 +24,9 @@ export function TicketDetail({ user }) {
   const [showTimeline, setShowTimeline] = useState(false);
   const [transitioning, setTransitioning] = useState('');
   const [replying, setReplying] = useState(false);
+  const [editing, setEditing] = useState(false);
+  const [editForm, setEditForm] = useState(null);
+  const [archiving, setArchiving] = useState(false);
 
   async function load() {
     try {
@@ -99,6 +102,45 @@ export function TicketDetail({ user }) {
     }
   }
 
+  function startEditing() {
+    setEditForm({
+      subject: ticket.subject,
+      description: ticket.description || '',
+      priority: ticket.priority,
+      category: ticket.category,
+    });
+    setEditing(true);
+  }
+
+  async function handleSaveEdit(e) {
+    e.preventDefault();
+    setError('');
+    try {
+      await api.updateTicket(ticketId, editForm);
+      setEditing(false);
+      load();
+    } catch (err) {
+      setError(err.message);
+    }
+  }
+
+  async function handleArchiveToggle() {
+    setError('');
+    setArchiving(true);
+    try {
+      if (ticket.archived_at) {
+        await api.restoreTicket(ticketId);
+      } else {
+        await api.archiveTicket(ticketId);
+      }
+      load();
+    } catch (err) {
+      setError(err.message);
+    } finally {
+      setArchiving(false);
+    }
+  }
+
   if (!ticket) {
     return (
       <div className="page">
@@ -125,40 +167,81 @@ export function TicketDetail({ user }) {
       </button>
 
       <div className="card">
-        <div className="detail-header">
-          <div>
-            <h2>
-              <span style={{ color: 'var(--text-muted)', fontWeight: 400 }}>#{ticket.id}</span>{' '}
-              {ticket.subject}
-            </h2>
-            <div className="detail-meta">
-              Requester: <strong>{ticket.requester_name}</strong> ({ticket.requester_email})
-              {' · '}Category: <strong>{ticket.category}</strong>
-              {assignee && <>{' · '}Assigned to: <strong>{assignee.name}</strong></>}
+        {ticket.archived_at && (
+          <div className="login-error mb-3">
+            This ticket is archived and hidden from default queue views.
+          </div>
+        )}
+
+        {editing ? (
+          <form onSubmit={handleSaveEdit}>
+            <input
+              style={{ width: '100%', marginBottom: 8, fontSize: 18, fontWeight: 600 }}
+              value={editForm.subject}
+              onChange={(e) => setEditForm({ ...editForm, subject: e.target.value })}
+            />
+            <textarea
+              rows={3}
+              style={{ width: '100%', marginBottom: 8 }}
+              value={editForm.description}
+              onChange={(e) => setEditForm({ ...editForm, description: e.target.value })}
+            />
+            <div className="detail-actions">
+              <select value={editForm.priority} onChange={(e) => setEditForm({ ...editForm, priority: e.target.value })}>
+                {['low', 'normal', 'high', 'urgent'].map((p) => <option key={p} value={p}>{p}</option>)}
+              </select>
+              <input
+                value={editForm.category}
+                onChange={(e) => setEditForm({ ...editForm, category: e.target.value })}
+              />
+              <button className="btn btn-primary btn-sm" type="submit">Save</button>
+              <button className="btn btn-ghost btn-sm" type="button" onClick={() => setEditing(false)}>Cancel</button>
+            </div>
+          </form>
+        ) : (
+          <div className="detail-header">
+            <div>
+              <h2>
+                <span style={{ color: 'var(--text-muted)', fontWeight: 400 }}>#{ticket.id}</span>{' '}
+                {ticket.subject}
+              </h2>
+              <div className="detail-meta">
+                Requester: <strong>{ticket.requester_name}</strong> ({ticket.requester_email})
+                {' · '}Category: <strong>{ticket.category}</strong>
+                {assignee && <>{' · '}Assigned to: <strong>{assignee.name}</strong></>}
+              </div>
+            </div>
+            <div className="detail-pills">
+              <span className={`pill pill-${ticket.status}`}>{ticket.status}</span>
+              <span className={`pill pill-${ticket.priority}`}>{ticket.priority}</span>
             </div>
           </div>
-          <div className="detail-pills">
-            <span className={`pill pill-${ticket.status}`}>{ticket.status}</span>
-            <span className={`pill pill-${ticket.priority}`}>{ticket.priority}</span>
-          </div>
-        </div>
+        )}
 
-        {ticket.description && (
+        {!editing && ticket.description && (
           <div className="detail-desc">{ticket.description}</div>
         )}
 
         <div className="detail-actions">
-          {nextStatuses.map((s) => (
+          {!editing && !ticket.archived_at && nextStatuses.map((s) => (
             <button key={s} className="btn btn-secondary btn-sm"
                     disabled={transitioning === s}
                     onClick={() => handleTransition(s)}>
               {transitioning === s ? 'Moving…' : `Move to ${s}`}
             </button>
           ))}
-          <button className="btn btn-secondary btn-sm" onClick={handleAddCollaborator}>+ Collaborator</button>
-          <button className="btn btn-ghost btn-sm" onClick={loadTimeline}>
-            {showTimeline ? 'Refresh Timeline' : 'View Timeline'}
-          </button>
+          {!editing && (
+            <>
+              <button className="btn btn-secondary btn-sm" onClick={startEditing}>Edit</button>
+              <button className="btn btn-secondary btn-sm" onClick={handleAddCollaborator}>+ Collaborator</button>
+              <button className="btn btn-ghost btn-sm" onClick={loadTimeline}>
+                {showTimeline ? 'Refresh Timeline' : 'View Timeline'}
+              </button>
+              <button className="btn btn-ghost btn-sm" disabled={archiving} onClick={handleArchiveToggle}>
+                {archiving ? 'Saving…' : ticket.archived_at ? 'Restore' : 'Archive'}
+              </button>
+            </>
+          )}
         </div>
 
         {error && <div className="login-error mt-3">{error} <button className="btn btn-ghost btn-sm" onClick={() => setError('')}>✕</button></div>}

@@ -14,7 +14,7 @@ export function TicketList({ user }) {
   const [tickets, setTickets] = useState([]);
   const [total, setTotal] = useState(0);
   const [users, setUsers] = useState([]);
-  const [filters, setFilters] = useState({ q: '', status: '', priority: '', category: '' });
+  const [filters, setFilters] = useState({ q: '', status: '', priority: '', category: '', archived: '' });
   const [sort, setSort] = useState('created_at');
   const [order, setOrder] = useState('desc');
   const [page, setPage] = useState(1);
@@ -113,6 +113,24 @@ export function TicketList({ user }) {
     }
   }
 
+  async function handleRestore(id) {
+    try {
+      const token = localStorage.getItem('token');
+      const res = await fetch(`http://localhost:3000/tickets/${id}/restore`, {
+        method: 'POST',
+        headers: { Authorization: `Bearer ${token}` },
+      });
+      if (!res.ok) {
+        const body = await res.json().catch(() => ({}));
+        throw new Error(body.error || 'Restore failed');
+      }
+      load();
+    } catch (err) {
+      setError(err.message);
+    }
+  }
+
+  const showArchivedCol = filters.archived === 'true';
   const isAgent = user.role === 'agent';
   const myTickets = isAgent ? tickets.filter((t) => t.primary_assignee_id === user.id) : tickets;
   const collabTickets = isAgent ? tickets.filter((t) => t.primary_assignee_id !== user.id) : [];
@@ -133,6 +151,11 @@ export function TicketList({ user }) {
         <td><PriorityPill priority={t.priority} /></td>
         <td style={{ color: 'var(--text-secondary)' }}>{t.category}</td>
         <td style={{ color: 'var(--text-secondary)', whiteSpace: 'nowrap' }}>{new Date(t.created_at).toLocaleDateString()}</td>
+        {showArchivedCol && (
+          <td className="checkbox-cell" onClick={(e) => e.stopPropagation()}>
+            <button className="btn btn-secondary btn-sm" onClick={() => handleRestore(t.id)}>Restore</button>
+          </td>
+        )}
       </tr>
     );
   }
@@ -174,6 +197,16 @@ export function TicketList({ user }) {
           <option value="desc">Desc</option>
           <option value="asc">Asc</option>
         </select>
+        <div style={{ display: 'inline-flex', alignItems: 'center', justifyContent: 'flex-start', gap: 6, flex: '0 0 auto', width: 'fit-content', whiteSpace: 'nowrap' }}>
+          <input
+            id="show-archived-checkbox"
+            type="checkbox"
+            checked={filters.archived === 'true'}
+            onChange={(e) => { setPage(1); setFilters({ ...filters, archived: e.target.checked ? 'true' : '' }); }}
+            style={{ width: 'auto', flex: '0 0 auto', margin: 0 }}
+          />
+          <label htmlFor="show-archived-checkbox" style={{ display: 'inline', width: 'auto' }}>Show archived</label>
+        </div>
       </div>
 
       {user.role === 'supervisor' && selected.size > 0 && (
@@ -192,10 +225,10 @@ export function TicketList({ user }) {
             <h3>My Tickets ({myTickets.length})</h3>
             <div className="table-wrap">
               <table>
-                <thead><tr><th>Ticket</th><th>Status</th><th>Priority</th><th>Category</th><th>Created</th></tr></thead>
+                <thead><tr><th>Ticket</th><th>Status</th><th>Priority</th><th>Category</th><th>Created</th>{showArchivedCol && <th></th>}</tr></thead>
                 <tbody>
                   {myTickets.map(renderRow)}
-                  {myTickets.length === 0 && <tr><td colSpan={5} style={{ textAlign: 'center', color: 'var(--text-muted)', padding: 24 }}>No tickets assigned to you</td></tr>}
+                  {myTickets.length === 0 && <tr><td colSpan={showArchivedCol ? 6 : 5} style={{ textAlign: 'center', color: 'var(--text-muted)', padding: 24 }}>No tickets assigned to you</td></tr>}
                 </tbody>
               </table>
             </div>
@@ -204,10 +237,10 @@ export function TicketList({ user }) {
             <h3>Collaborating On ({collabTickets.length})</h3>
             <div className="table-wrap">
               <table>
-                <thead><tr><th>Ticket</th><th>Status</th><th>Priority</th><th>Category</th><th>Created</th></tr></thead>
+                <thead><tr><th>Ticket</th><th>Status</th><th>Priority</th><th>Category</th><th>Created</th>{showArchivedCol && <th></th>}</tr></thead>
                 <tbody>
                   {collabTickets.map(renderRow)}
-                  {collabTickets.length === 0 && <tr><td colSpan={5} style={{ textAlign: 'center', color: 'var(--text-muted)', padding: 24 }}>Not collaborating on any tickets</td></tr>}
+                  {collabTickets.length === 0 && <tr><td colSpan={showArchivedCol ? 6 : 5} style={{ textAlign: 'center', color: 'var(--text-muted)', padding: 24 }}>Not collaborating on any tickets</td></tr>}
                 </tbody>
               </table>
             </div>
@@ -217,10 +250,10 @@ export function TicketList({ user }) {
         <div className="card">
           <div className="table-wrap">
             <table>
-              <thead><tr>{user.role === 'supervisor' && <th style={{ width: 36 }}></th>}<th>Ticket</th><th>Status</th><th>Priority</th><th>Category</th><th>Created</th></tr></thead>
+              <thead><tr>{user.role === 'supervisor' && <th style={{ width: 36 }}></th>}<th>Ticket</th><th>Status</th><th>Priority</th><th>Category</th><th>Created</th>{showArchivedCol && <th></th>}</tr></thead>
               <tbody>
                 {tickets.map(renderRow)}
-                {tickets.length === 0 && <tr><td colSpan={6} style={{ textAlign: 'center', color: 'var(--text-muted)', padding: 24 }}>No tickets found</td></tr>}
+                {tickets.length === 0 && <tr><td colSpan={(user.role === 'supervisor' ? 6 : 5) + (showArchivedCol ? 1 : 0)} style={{ textAlign: 'center', color: 'var(--text-muted)', padding: 24 }}>No tickets found</td></tr>}
               </tbody>
             </table>
           </div>

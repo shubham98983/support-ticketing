@@ -105,6 +105,8 @@ export const api = {
     request('/tickets/bulk/reassign', { method: 'POST', body: { ticketIds, agentId } }),
   bulkClose: (ticketIds) => request('/tickets/bulk/close', { method: 'POST', body: { ticketIds } }),
   getUsers: () => request('/users'),
+  archiveTicket: (id) => request(`/tickets/${id}/archive`, { method: 'POST' }),
+  restoreTicket: (id) => request(`/tickets/${id}/restore`, { method: 'POST' }),
 };
 
 export { getToken, setToken, clearToken, restoreUser, setOnUnauthorized };

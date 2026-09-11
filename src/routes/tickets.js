@@ -39,14 +39,23 @@ router.post('/', async (req, res) => {
 // Shared by GET / and GET /export.csv — role scoping and every filter must
 // behave identically in both places, or "export what I'm looking at" lies.
 function buildTicketFilterQuery(req) {
-  const { q, status, priority, category, assigneeId } = req.query;
+  const { q, status, priority, category, assigneeId, archived } = req.query;
 
-  const conditions = ['t.archived_at IS NULL'];
+  const conditions = [];
   const values = [];
   const addParam = (v) => {
     values.push(v);
     return `$${values.length}`;
   };
+
+  // Default: hide archived tickets from every normal view (goal 2).
+  // ?archived=true shows ONLY archived tickets (the one place they can be
+  // found again, e.g. to restore). ?archived=all shows everything.
+  if (archived === 'true') {
+    conditions.push('t.archived_at IS NOT NULL');
+  } else if (archived !== 'all') {
+    conditions.push('t.archived_at IS NULL');
+  }
 
   if (req.user.role !== 'supervisor') {
     const p = addParam(req.user.id);
@@ -64,7 +73,7 @@ function buildTicketFilterQuery(req) {
   if (category) conditions.push(`t.category = ${addParam(category)}`);
   if (assigneeId) conditions.push(`t.primary_assignee_id = ${addParam(assigneeId)}`);
 
-  return { whereClause: conditions.join(' AND '), values, addParam };
+  return { whereClause: conditions.length ? conditions.join(' AND ') : '1=1', values, addParam };
 }
 
 // GET /tickets — server-side search, filter, sort, and pagination.
@@ -424,6 +433,31 @@ router.get('/:id/timeline', loadTicket, requirePermission(authorize.canView), as
     [req.ticket.id]
   );
   res.json(result.rows);
+});
+
+// POST /tickets/:id/archive — removes the ticket from default queue views
+// without destroying its history (goal 2).
+router.post('/:id/archive', loadTicket, requirePermission(authorize.canArchive), async (req, res) => {
+  if (req.ticket.archived_at) {
+    return res.status(400).json({ error: 'Ticket is already archived.' });
+  }
+  const result = await pool.query(
+    'UPDATE tickets SET archived_at = now(), updated_at = now() WHERE id = $1 RETURNING *',
+    [req.ticket.id]
+  );
+  res.json(result.rows[0]);
+});
+
+// POST /tickets/:id/restore — reverses an archive.
+router.post('/:id/restore', loadTicket, requirePermission(authorize.canArchive), async (req, res) => {
+  if (!req.ticket.archived_at) {
+    return res.status(400).json({ error: 'Ticket is not archived.' });
+  }
+  const result = await pool.query(
+    'UPDATE tickets SET archived_at = NULL, updated_at = now() WHERE id = $1 RETURNING *',
+    [req.ticket.id]
+  );
+  res.json(result.rows[0]);
 });
 
 module.exports = router;
