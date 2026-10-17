@@ -19,7 +19,7 @@ The first sign-in and dashboard load may take a little time. Please allow a few 
 |agent      |agent2@demo.com | password123|
 |agent      |agent3@demo.com | password123|
 |agent      |agent4@demo.com | password123|
-|supervisor |agent4@demo.com | password123|
+|supervisor |supervisor@demo.com | password123|
 
 
 ## Stack
